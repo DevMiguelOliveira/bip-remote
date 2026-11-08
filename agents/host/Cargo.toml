@@ -1,0 +1,11 @@
+[package]
+name = "bipremote-host"
+version = "0.1.0"
+description = "BIPRemote Windows host agent foundation"
+edition = "2024"
+
+[workspace]
+members = ["service"]
+resolver = "3"
+
+[dependencies]

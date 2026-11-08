@@ -1,0 +1,7 @@
+[package]
+name = "bipremote-host-service"
+version = "0.1.0"
+description = "BIPRemote least-privilege Windows service foundation"
+edition = "2024"
+
+[dependencies]

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bipremote.dev/schemas/events/session-audit-event.v1.json",
+  "title": "BIPRemote Session Audit Event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "actorType", "result"],
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["session_requested", "session_approved", "session_started", "session_ended", "session_revoked"]
+    },
+    "actorType": {
+      "type": "string",
+      "enum": ["operator", "host", "system"]
+    },
+    "result": {
+      "type": "string",
+      "enum": ["accepted", "denied", "failed"]
+    },
+    "reason": {
+      "type": "string",
+      "maxLength": 500
+    }
+  }
+}

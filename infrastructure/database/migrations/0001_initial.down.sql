@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS audit_events;
+DROP TABLE IF EXISTS session_participants;
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS host_credentials;
+DROP TABLE IF EXISTS hosts;
+DROP TABLE IF EXISTS organization_memberships;
+DROP TABLE IF EXISTS operators;
+DROP TABLE IF EXISTS units;
+DROP TABLE IF EXISTS organizations;

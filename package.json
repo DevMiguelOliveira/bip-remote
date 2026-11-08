@@ -1,0 +1,10 @@
+{
+  "name": "@bipremote/workspace",
+  "private": true,
+  "packageManager": "pnpm@12.16.1",
+  "scripts": {
+    "admin:build": "pnpm --filter @bipremote/admin build",
+    "admin:dev": "pnpm --filter @bipremote/admin dev",
+    "validate:structure": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/validate-structure.ps1"
+  }
+}

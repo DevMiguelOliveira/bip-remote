@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  structure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate required paths
+        shell: pwsh
+        run: ./scripts/validate-structure.ps1
+
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.x'
+      - name: Check formatting
+        shell: bash
+        run: test -z "$(gofmt -l services/server)"
+      - name: Test backend
+        run: go test ./services/server/...
+      - name: Vet backend
+        run: go vet ./services/server/...
+
+  host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.99.0
+          components: rustfmt, clippy
+      - name: Check formatting
+        run: cargo fmt --all --manifest-path agents/host/Cargo.toml -- --check
+      - name: Test Rust crates
+        run: cargo test --manifest-path agents/host/Cargo.toml
+      - name: Lint Rust crates
+        run: cargo clippy --manifest-path agents/host/Cargo.toml --all-targets -- -D warnings
+
+  admin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.16.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.x
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build admin
+        run: pnpm --filter @bipremote/admin build

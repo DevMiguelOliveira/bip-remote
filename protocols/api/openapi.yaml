@@ -1,0 +1,225 @@
+openapi: 3.1.0
+info:
+  title: BIPRemote API
+  version: 0.1.0
+  description: Versioned control-plane contract for organizations, hosts and audited sessions.
+servers:
+  - url: http://localhost:8080
+    description: Local development
+paths:
+  /healthz:
+    get:
+      operationId: health
+      responses:
+        '200':
+          description: Process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /readyz:
+    get:
+      operationId: readiness
+      responses:
+        '200':
+          description: Dependencies are ready.
+        '503':
+          description: A required dependency is unavailable.
+  /api/v1/organizations:
+    get:
+      operationId: listOrganizations
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Organizations visible to the authenticated operator.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/hosts:
+    get:
+      operationId: listHosts
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Hosts visible under the operator authorization scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/sessions:
+    post:
+      operationId: createSession
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+      responses:
+        '201':
+          description: Session authorization was created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/sessions/{sessionId}/events:
+    get:
+      operationId: sessionEvents
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      x-websocket:
+        subprotocols:
+          - bipremote.events.v1
+        authentication: bearer-token-during-upgrade
+      responses:
+        '101':
+          description: WebSocket upgrade accepted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-session-token
+  parameters:
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    BadRequest:
+      description: Request validation failed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Authentication is required or invalid.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: ok
+    Organization:
+      type: object
+      required: [id, name, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+        createdAt:
+          type: string
+          format: date-time
+    OrganizationList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Organization'
+    Host:
+      type: object
+      required: [id, organizationId, displayName, status, identityFingerprint]
+      properties:
+        id:
+          type: string
+          format: uuid
+        organizationId:
+          type: string
+          format: uuid
+        unitId:
+          type: string
+          format: uuid
+          nullable: true
+        displayName:
+          type: string
+        status:
+          type: string
+          enum: [pending, online, offline, revoked]
+        identityFingerprint:
+          type: string
+        lastSeenAt:
+          type: string
+          format: date-time
+          nullable: true
+    HostList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Host'
+    CreateSessionRequest:
+      type: object
+      required: [hostId]
+      properties:
+        hostId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          maxLength: 500
+    Session:
+      type: object
+      required: [id, hostId, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        hostId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [requested, approved, active, ended, revoked]
+        createdAt:
+          type: string
+          format: date-time
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 100
+          maximum: 599
+        detail:
+          type: string
+        requestId:
+          type: string
