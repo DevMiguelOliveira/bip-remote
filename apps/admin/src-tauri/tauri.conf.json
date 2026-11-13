@@ -26,5 +26,10 @@
   "bundle": {
     "active": false,
     "icon": ["icons/icon.ico"]
+  },
+  "plugins": {
+    "fs": {
+      "scope": ["$APPDATA/bipremote/*"]
+    }
   }
 }
