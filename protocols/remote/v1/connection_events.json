@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BIPRemote Connection Events v1",
+  "type": "object",
+  "description": "Eventos de conexão para estabelecer e gerenciar sessões remotas",
+  "typeDefinition": "openapi3",
+  "properties": {
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "connection.initiate",
+        "connection.accepted",
+        "connection.rejected",
+        "connection.closed",
+        "connection.error"
+      ],
+      "description": "Tipo de evento de conexão"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "v1",
+      "description": "Versão do schema do evento"
+    },
+    "correlation_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "ID de correlação para rastreamento distribuído"
+    },
+    "sdp_offer": {
+      "type": "string",
+      "description": "SDP offer para estabelecimento de conexão P2P (TCP hole punching)"
+    },
+    "sdp_answer": {
+      "type": "string",
+      "description": "SDP answer respondendo ao offer"
+    },
+    "relay_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL do servidor relay quando conexão direta falha"
+    },
+    "host_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Impressão digital criptográfica do host (SHA-256)"
+    },
+    "client_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Impressão digital criptográfica do cliente"
+    }
+  },
+  "required": ["event_type", "schema_version", "correlation_id"],
+  "additionalProperties": false
+}

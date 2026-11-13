@@ -1,0 +1,58 @@
+{
+  "protocol": "BIPRemote Remote Protocol",
+  "version": "v1",
+  "description": "Versionado e auditável protocolo de eventos para comunicação entre Host, Serviço Privilegiado e Backend Go",
+  "specifications": [
+    {
+      "name": "Session Events",
+      "file": "session_events.json",
+      "event_types": [
+        "connection.established",
+        "connection.failed",
+        "session.approved",
+        "session.ended",
+        "stream.frame",
+        "stream.audio",
+        "control.input",
+        "auth.challenge",
+        "auth.response"
+      ]
+    },
+    {
+      "name": "Connection Events",
+      "file": "connection_events.json",
+      "event_types": [
+        "connection.initiate",
+        "connection.accepted",
+        "connection.rejected",
+        "connection.closed",
+        "connection.error"
+      ]
+    },
+    {
+      "name": "Stream Events",
+      "file": "stream_events.json",
+      "event_types": [
+        "stream.start",
+        "stream.frame",
+        "stream.audio",
+        "stream.stop",
+        "stream.error"
+      ]
+    },
+    {
+      "name": "Authentication Events",
+      "file": "auth_events.json",
+      "event_types": [
+        "auth.challenge",
+        "auth.response"
+      ]
+    }
+  ],
+  "envelope": {
+    "required_fields": ["event_type", "schema_version", "correlation_id", "payload", "actor_type"],
+    "optional_fields": ["actor_id", "resource_type", "resource_id"],
+    "schema_version": "v1",
+    "correlation_id": "UUID format required"
+  }
+}

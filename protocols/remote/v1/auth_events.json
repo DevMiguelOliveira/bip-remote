@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BIPRemote Authentication Events v1",
+  "type": "object",
+  "description": "Events for authentication challenge and response between client and host",
+  "typeDefinition": "openapi3",
+  "properties": {
+    "event_type": {
+      "type": "string",
+      "enum": ["auth.challenge", "auth.response"],
+      "description": "Type of authentication event"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "v1",
+      "description": "Version of the schema"
+    },
+    "correlation_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Correlation ID for distributed tracing"
+    },
+    "session_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Session ID associated with authentication"
+    },
+    "challenge_type": {
+      "type": "string",
+      "enum": ["mtls", "jwt", "tls-certificate"],
+      "description": "Type of authentication challenge"
+    },
+    "challenge_data": {
+      "type": "object",
+      "description": "Challenge-specific data (certificate, JWT token, etc.)"
+    },
+    "response_status": {
+      "type": "string",
+      "enum": ["success", "failed"],
+      "description": "Authentication response status"
+    },
+    "response_error": {
+      "type": "string",
+      "description": "Error message if authentication failed"
+    },
+    "actor_type": {
+      "type": "string",
+      "enum": ["host", "client"],
+      "description": "Type of actor initiating the event"
+    },
+    "actor_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Actor ID (host fingerprint or client identifier)"
+    }
+  },
+  "required": ["event_type", "schema_version", "correlation_id, session_id, challenge_type, response_status, actor_type"],
+  "additionalProperties": false
+}

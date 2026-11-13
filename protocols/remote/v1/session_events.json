@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BIPRemote Session Events v1",
+  "type": "object",
+  "description": "Versionadas e auditáveis. O envelope v1 permanece imutável.",
+  "typeDefinition": "openapi3",
+  "properties": {
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "connection.established",
+        "connection.failed",
+        "session.approved",
+        "session.ended",
+        "stream.frame",
+        "stream.audio",
+        "control.input",
+        "auth.challenge",
+        "auth.response"
+      ],
+      "description": "Tipo de evento session"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "v1",
+      "description": "Versão do schema do evento"
+    },
+    "correlation_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "ID de correlação para rastreamento distribuído"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Payload específico do event_type"
+    },
+    "actor_type": {
+      "type": "string",
+      "enum": ["host", "client", "system"],
+      "description": "Tipo do ator do evento"
+    },
+    "actor_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "ID do ator (não para system)"
+    },
+    "resource_type": {
+      "type": "string",
+      "enum": ["session", "connection", "stream", "control"],
+      "description": "Tipo de recurso associado"
+    },
+    "resource_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "ID do recurso associado"
+    }
+  },
+  "required": ["event_type", "schema_version", "correlation_id", "payload", "actor_type"],
+  "additionalProperties": false
+}
