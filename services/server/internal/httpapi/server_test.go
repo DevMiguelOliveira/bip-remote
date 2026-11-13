@@ -5,11 +5,20 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/DevMiguelOliveira/bip-remote/infrastructure/database"
 	"github.com/DevMiguelOliveira/bip-remote/services/server/internal/config"
 )
 
+func newTestHandler(t *testing.T) http.Handler {
+	pg, err := database.NewPostgres("postgresql://test:test@localhost:5432/test?sslmode=disable")
+	if err != nil {
+		t.Skip("PostgreSQL not available, skipping test")
+	}
+	return New(config.Config{}, pg, database.NewSessionStore(pg.GetPool()))
+}
+
 func TestHealth(t *testing.T) {
-	handler := New(config.Config{})
+	handler := newTestHandler(t)
 	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	recorder := httptest.NewRecorder()
 
@@ -24,7 +33,8 @@ func TestHealth(t *testing.T) {
 }
 
 func TestReadyRequiresDatabaseConfiguration(t *testing.T) {
-	handler := New(config.Config{})
+	// Test without database - should return ServiceUnavailable
+	handler := New(config.Config{DatabaseURL: ""}, nil, nil)
 	request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	recorder := httptest.NewRecorder()
 
