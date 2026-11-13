@@ -4,7 +4,8 @@
 //! certificate generation, validation, and secure session token management.
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
-use ed25519::SigningKey;
+use ed25519_dalek::{SigningKey, VerifyingKey, Verifier, Signature, Signer};
+use rand::thread_rng;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, pem::PemObject};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use sha2::{Digest, Sha256};
@@ -157,8 +158,9 @@ impl SessionTokenManager {
             return Err("Token expired".to_string());
         }
 
-        let mut token_mut = tokens.get_mut(token).unwrap();
-        token_mut.expires_at = now + self.ttl.as_secs();
+        if let Some(token_mut) = tokens.get_mut(token) {
+            token_mut.expires_at = now + self.ttl.as_secs();
+        }
 
         Ok(session_token)
     }
@@ -221,7 +223,7 @@ impl SecureMessage {
         message_type: String,
         session_id: String,
         payload: serde_json::Value,
-        signing_key: &ed25519::SigningKey,
+        signing_key: &ed25519_dalek::SigningKey,
     ) -> Self {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -242,7 +244,7 @@ impl SecureMessage {
         }
     }
 
-    pub fn verify(&self, verifying_key: &ed25519::VerifyingKey) -> bool {
+    pub fn verify(&self, verifying_key: &ed25519_dalek::VerifyingKey) -> bool {
         let payload_bytes = serde_json::to_vec(&self.payload).unwrap_or_default();
         let expected_hash = BASE64_STANDARD.encode(Sha256::digest(&payload_bytes));
 
@@ -266,7 +268,7 @@ impl SecureMessage {
 
         let mut sig_array = [0u8; 64];
         sig_array.copy_from_slice(&signature_bytes);
-        let signature = ed25519::Signature::from_bytes(&sig_array);
+        let signature = ed25519_dalek::Signature::from_bytes(&sig_array);
 
         verifying_key.verify(&payload_bytes, &signature).is_ok()
     }
@@ -279,16 +281,9 @@ fn generate_self_signed_ca() -> Result<(Vec<u8>, Vec<u8>), String> {
 
     let mut params = rcgen::CertificateParams::new(vec![]);
     params.distinguished_name = rcgen::DistinguishedName::new();
-    params
-        .distinguished_name
-        .push(rcgen::DnType::CommonName, "BIPRemote Service CA");
-    params
-        .distinguished_name
-        .push(rcgen::DnType::OrganizationName, "BIPRemote");
-    params.distinguished_name.push(
-        rcgen::DnType::OrganizationalUnitName,
-        "Certificate Authority",
-    );
+    params.distinguished_name.push(rcgen::DnType::CommonName, "BIPRemote Service CA");
+    params.distinguished_name.push(rcgen::DnType::OrganizationName, "BIPRemote");
+    params.distinguished_name.push(rcgen::DnType::OrganizationalUnitName, "Certificate Authority");
     params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
     params.key_usages = vec![
         rcgen::KeyUsagePurpose::KeyCertSign,
@@ -345,9 +340,11 @@ mod tests {
 
     #[test]
     fn test_secure_message_signing() {
-        use ed25519::SigningKey;
+        use ed25519_dalek::{SigningKey, VerifyingKey};
+        use rand::thread_rng;
 
-        let signing_key = SigningKey::generate(&mut rand::thread_rng());
+        let mut rng = thread_rng();
+        let signing_key = SigningKey::generate(&mut rng);
         let verifying_key = signing_key.verifying_key();
 
         let message = SecureMessage::new(
