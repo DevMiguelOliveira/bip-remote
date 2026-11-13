@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/DevMiguelOliveira/bip-remote/services/server/internal/config"
 	"github.com/DevMiguelOliveira/bip-remote/infrastructure/database"
+	"github.com/DevMiguelOliveira/bip-remote/services/server/internal/config"
 )
 
 func newTestHandler(t *testing.T) http.Handler {
