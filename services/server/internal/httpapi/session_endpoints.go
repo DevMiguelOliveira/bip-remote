@@ -3,8 +3,6 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
-	"github.com/DevMiguelOliveira/bip-remote/services/server/internal/config"
-	"github.com/DevMiguelOliveira/bip-remote/infrastructure/database"
 )
 
 // Session represents a remote session

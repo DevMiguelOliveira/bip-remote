@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/DevMiguelOliveira/bip-remote/infrastructure/database"
 	"github.com/DevMiguelOliveira/bip-remote/services/server/internal/config"
 	"github.com/DevMiguelOliveira/bip-remote/services/server/internal/httpapi"
-	"github.com/DevMiguelOliveira/bip-remote/infrastructure/database"
 )
 
 func main() {
@@ -34,7 +34,7 @@ func main() {
 	defer pg.Close()
 
 	// Initialize session store
-	sessionStore := database.NewSessionStore(pg)
+	sessionStore := database.NewSessionStore(pg.GetPool())
 
 	logger.Info("database initialized", "url_masked", maskDatabaseURL(cfg.DatabaseURL))
 

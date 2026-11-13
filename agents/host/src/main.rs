@@ -60,7 +60,9 @@ fn handle_hole_punch() {
     println!("TCP Hole Punching Protocol...");
     println!("Mediator: http://localhost:8082 (default)");
     println!("Fingerprint from env: BIPREMOTE_FINGERPRINT");
-    println!("Phases: 1) register host, 2) exchange ICE candidates, 3) exchange SDP offer/answer, 4) establish session");
+    println!(
+        "Phases: 1) register host, 2) exchange ICE candidates, 3) exchange SDP offer/answer, 4) establish session"
+    );
     println!("Hole punching protocol executes asynchronously with mediator (reqwest)");
 }
 

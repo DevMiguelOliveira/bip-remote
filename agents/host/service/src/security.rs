@@ -3,16 +3,16 @@
 //! Provides mutual TLS authentication between host and privileged service,
 //! certificate generation, validation, and secure session token management.
 
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
+use ed25519::SigningKey;
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, pem::PemObject};
+use rustls::{ClientConfig, RootCertStore, ServerConfig};
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use std::collections::HashMap;
 use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug};
-use ed25519::SigningKey;
-use sha2::{Sha256, Digest};
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
-use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, pem::PemObject};
-use rustls::{RootCertStore, ServerConfig, ClientConfig};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Simple CA using pre-generated certificates
@@ -54,8 +54,11 @@ impl ServiceCA {
     pub fn ca_cert_der(&self) -> Vec<u8> {
         let pem_str = String::from_utf8_lossy(&self.ca_cert_pem);
         let b64_start = pem_str.find("-----BEGIN CERTIFICATE-----").unwrap_or(0);
-        let b64_end = pem_str.find("-----END CERTIFICATE-----").unwrap_or(pem_str.len());
-        let b64 = &pem_str[b64_start..].replace("-----BEGIN CERTIFICATE-----", "")
+        let b64_end = pem_str
+            .find("-----END CERTIFICATE-----")
+            .unwrap_or(pem_str.len());
+        let b64 = &pem_str[b64_start..]
+            .replace("-----BEGIN CERTIFICATE-----", "")
             .replace("-----END CERTIFICATE-----", "")
             .replace('\n', "")
             .replace('\r', "");
@@ -67,8 +70,11 @@ impl ServiceCA {
     pub fn ca_key_der(&self) -> Vec<u8> {
         let pem_str = String::from_utf8_lossy(&self.ca_key_pem);
         let b64_start = pem_str.find("-----BEGIN PRIVATE KEY-----").unwrap_or(0);
-        let b64_end = pem_str.find("-----END PRIVATE KEY-----").unwrap_or(pem_str.len());
-        let b64 = &pem_str[b64_start..].replace("-----BEGIN PRIVATE KEY-----", "")
+        let b64_end = pem_str
+            .find("-----END PRIVATE KEY-----")
+            .unwrap_or(pem_str.len());
+        let b64 = &pem_str[b64_start..]
+            .replace("-----BEGIN PRIVATE KEY-----", "")
             .replace("-----END PRIVATE KEY-----", "")
             .replace('\n', "")
             .replace('\r', "");
@@ -129,16 +135,17 @@ impl SessionTokenManager {
         let mut tokens = self.tokens.write().await;
         tokens.insert(token.clone(), session_token);
 
-        debug!("Created session token for session: {}", session_token.session_id);
+        debug!(
+            "Created session token for session: {}",
+            session_token.session_id
+        );
         Ok(token)
     }
 
     pub async fn validate_token(&self, token: &str) -> Result<SessionToken, String> {
         let mut tokens = self.tokens.write().await;
 
-        let session_token = tokens.get(token)
-            .ok_or("Invalid or expired token")?
-            .clone();
+        let session_token = tokens.get(token).ok_or("Invalid or expired token")?.clone();
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -272,9 +279,16 @@ fn generate_self_signed_ca() -> Result<(Vec<u8>, Vec<u8>), String> {
 
     let mut params = rcgen::CertificateParams::new(vec![]);
     params.distinguished_name = rcgen::DistinguishedName::new();
-    params.distinguished_name.push(rcgen::DnType::CommonName, "BIPRemote Service CA");
-    params.distinguished_name.push(rcgen::DnType::OrganizationName, "BIPRemote");
-    params.distinguished_name.push(rcgen::DnType::OrganizationalUnitName, "Certificate Authority");
+    params
+        .distinguished_name
+        .push(rcgen::DnType::CommonName, "BIPRemote Service CA");
+    params
+        .distinguished_name
+        .push(rcgen::DnType::OrganizationName, "BIPRemote");
+    params.distinguished_name.push(
+        rcgen::DnType::OrganizationalUnitName,
+        "Certificate Authority",
+    );
     params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
     params.key_usages = vec![
         rcgen::KeyUsagePurpose::KeyCertSign,
@@ -284,7 +298,8 @@ fn generate_self_signed_ca() -> Result<(Vec<u8>, Vec<u8>), String> {
     let key_pair = rcgen::KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)
         .map_err(|e| format!("Failed to generate key: {}", e))?;
 
-    let cert = rcgen::Certificate::from_params(params).map_err(|e| format!("Failed to create cert: {}", e))?;
+    let cert = rcgen::Certificate::from_params(params)
+        .map_err(|e| format!("Failed to create cert: {}", e))?;
 
     let cert_pem = cert.serialize_pem().map_err(|e| e.to_string())?;
     let key_pem = key_pair.serialize_pem();
@@ -308,11 +323,14 @@ mod tests {
     async fn test_session_token_lifecycle() {
         let manager = SessionTokenManager::new(1, 1);
 
-        let token = manager.create_token(
-            "session-123".to_string(),
-            "fingerprint-abc".to_string(),
-            vec!["read".to_string(), "write".to_string()],
-        ).await.unwrap();
+        let token = manager
+            .create_token(
+                "session-123".to_string(),
+                "fingerprint-abc".to_string(),
+                vec!["read".to_string(), "write".to_string()],
+            )
+            .await
+            .unwrap();
 
         let validated = manager.validate_token(&token).await.unwrap();
         assert_eq!(validated.session_id, "session-123");

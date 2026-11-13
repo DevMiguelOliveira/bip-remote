@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/DevMiguelOliveira/bip-remote/services/server/internal/config"
 	"github.com/DevMiguelOliveira/bip-remote/infrastructure/database"
+	"github.com/DevMiguelOliveira/bip-remote/services/server/internal/config"
 )
 
 type Server struct {

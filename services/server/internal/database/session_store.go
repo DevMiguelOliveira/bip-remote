@@ -2,7 +2,6 @@ package connection
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -39,7 +38,7 @@ func (s *SessionStore) CreateSession(orgID, hostID, clientID string) (string, er
 
 // UpdateSessionState updates the state of a session
 func (s *SessionStore) UpdateSessionState(sessionID string, state schemas.SessionState, approvedBy *string, approvedAt *time.Time) error {
-	_, err := s.pool.Ex(`
+	_, err := s.pool.Exec(`
 		UPDATE sessions
 		SET state = $1, authorized_at = $2, approved_by = $3, approved_at = $4
 		WHERE id = $5
@@ -133,7 +132,7 @@ func (s *SessionStore) ListSessionsByOrganization(orgID string) ([]schemas.Sessi
 
 // EndSession ends a session record
 func (s *SessionStore) EndSession(sessionID string, endedAt time.Time, durationSeconds int64) error {
-	_, err := s.pool.Ex(`
+	_, err := s.pool.Exec(`
 		UPDATE sessions
 		SET state = 'ended', ended_at = $1, duration_seconds = $2
 		WHERE id = $3
@@ -148,7 +147,7 @@ func (s *SessionStore) EndSession(sessionID string, endedAt time.Time, durationS
 
 // RecordSessionEvent records an audit event for a session
 func (s *SessionStore) RecordSessionEvent(eventType schemas.EventType, sessionID, correlationID, payloadJSON, actorType string, actorID *string, resourceType *string, resourceID *string) error {
-	_, err := s.pool.Ex(`
+	_, err := s.pool.Exec(`
 		INSERT INTO session_events (session_id, event_type, schema_version, correlation_id, payload, actor_type, actor_id, resource_type, resource_id)
 		VALUES ($1, $2, 'v1', $3, $4::jsonb, $5, $6, $7, $8)
 	`, sessionID, eventType, correlationID, payloadJSON, actorType, actorID, resourceType, resourceID)

@@ -3,25 +3,27 @@
 //! Provides mTLS-secured communication channels with mutual authentication,
 //! message signing, and secure session management.
 
+use hyper::{Body, Request, Response, Server};
+use rustls::pki_types::{
+    CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, SectionKind, pem::PemObject,
+};
+use rustls::{ClientConfig, RootCertStore, ServerConfig};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 use tokio::sync::{RwLock, mpsc};
 use tokio_rustls::{TlsAcceptor, TlsConnector};
-use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, pem::PemObject, SectionKind};
-use rustls::{RootCertStore, ServerConfig, ClientConfig};
-use tracing::{info, warn, error, debug, instrument};
-use hyper::{Body, Request, Response, Server};
-use serde::{Serialize, Deserialize};
+use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
-use std::net::SocketAddr;
-use tokio::net::TcpListener;
 
-use crate::security::{ServiceCA, SessionTokenManager, SecureMessage, SessionToken};
+use crate::security::{SecureMessage, ServiceCA, SessionToken, SessionTokenManager};
 
 // Re-export security types
-pub use crate::security::{ServiceCA, SessionTokenManager, SecureMessage, SessionToken};
+pub use crate::security::{SecureMessage, ServiceCA, SessionToken, SessionTokenManager};
 
 /// Secure IPC server configuration
 #[derive(Clone, Debug)]
@@ -154,10 +156,14 @@ impl SecureIpcServer {
 
     /// Start the secure IPC server (simplified - without TLS for now)
     pub async fn start(&self) -> Result<(), String> {
-        let addr: SocketAddr = self.config.listen_addr.parse()
+        let addr: SocketAddr = self
+            .config
+            .listen_addr
+            .parse()
             .map_err(|e| format!("Invalid address: {}", e))?;
 
-        let listener = TcpListener::bind(addr).await
+        let listener = TcpListener::bind(addr)
+            .await
             .map_err(|e| format!("Failed to bind: {}", e))?;
 
         info!("Secure IPC server listening on {}", self.config.listen_addr);
@@ -171,12 +177,9 @@ impl SecureIpcServer {
                     let config = self.config.clone();
 
                     tokio::spawn(async move {
-                        if let Err(e) = Self::handle_connection(
-                            stream,
-                            sessions,
-                            token_manager,
-                            config,
-                        ).await {
+                        if let Err(e) =
+                            Self::handle_connection(stream, sessions, token_manager, config).await
+                        {
                             warn!("Connection error from {}: {}", addr, e);
                         }
                     });
@@ -200,9 +203,7 @@ impl SecureIpcServer {
         let make_svc = hyper::service::service_fn(move |req| {
             let sessions = sessions.clone();
             let token_manager = token_manager.clone();
-            async move {
-                Self::handle_request(req, sessions, token_manager, config.clone()).await
-            }
+            async move { Self::handle_request(req, sessions, token_manager, config.clone()).await }
         });
 
         // Serve the connection
@@ -227,7 +228,9 @@ impl SecureIpcServer {
         debug!("Secure IPC request: {} {}", method, path);
 
         // Extract and validate session token from Authorization header
-        let auth_header = req.headers().get("Authorization")
+        let auth_header = req
+            .headers()
+            .get("Authorization")
             .and_then(|h| h.to_str().ok())
             .and_then(|h| h.strip_prefix("Bearer "));
 
@@ -237,7 +240,9 @@ impl SecureIpcServer {
                 return Response::builder()
                     .status(401)
                     .header("Content-Type", "application/json")
-                    .body(Body::from(r#"{"error": "Missing authorization token"}"#.to_string()))
+                    .body(Body::from(
+                        r#"{"error": "Missing authorization token"}"#.to_string(),
+                    ))
                     .unwrap();
             }
         };
@@ -272,15 +277,9 @@ impl SecureIpcServer {
             ("POST", "/api/v1/streams/stop") => {
                 Self::handle_stream_stop(req, &host_fingerprint).await
             }
-            ("POST", "/api/v1/input") => {
-                Self::handle_input(req, &host_fingerprint).await
-            }
-            ("GET", "/api/v1/health") => {
-                Self::handle_health().await
-            }
-            ("GET", "/api/v1/status") => {
-                Self::handle_status(sessions).await
-            }
+            ("POST", "/api/v1/input") => Self::handle_input(req, &host_fingerprint).await,
+            ("GET", "/api/v1/health") => Self::handle_health().await,
+            ("GET", "/api/v1/status") => Self::handle_status(sessions).await,
             _ => Self::not_found(),
         };
 
@@ -288,11 +287,9 @@ impl SecureIpcServer {
     }
 
     /// Handle session approval
-    async fn handle_session_approve(
-        req: Request<Body>,
-        host_fingerprint: &str,
-    ) -> Response<Body> {
-        let body = hyper::body::to_string(req.into_body()).await
+    async fn handle_session_approve(req: Request<Body>, host_fingerprint: &str) -> Response<Body> {
+        let body = hyper::body::to_string(req.into_body())
+            .await
             .unwrap_or_default();
 
         let approve_req: serde_json::Value = match serde_json::from_str(&body) {
@@ -305,11 +302,15 @@ impl SecureIpcServer {
             }
         };
 
-        let session_id = approve_req.get("session_id")
+        let session_id = approve_req
+            .get("session_id")
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
-        info!("Session approved: {} by host {}", session_id, host_fingerprint);
+        info!(
+            "Session approved: {} by host {}",
+            session_id, host_fingerprint
+        );
 
         Response::builder()
             .status(200)
@@ -319,17 +320,16 @@ impl SecureIpcServer {
                     "success": true,
                     "session_id": session_id,
                     "status": "approved"
-                })).unwrap()
+                }))
+                .unwrap(),
             ))
             .unwrap()
     }
 
     /// Handle session end
-    async fn handle_session_end(
-        req: Request<Body>,
-        host_fingerprint: &str,
-    ) -> Response<Body> {
-        let body = hyper::body::to_string(req.into_body()).await
+    async fn handle_session_end(req: Request<Body>, host_fingerprint: &str) -> Response<Body> {
+        let body = hyper::body::to_string(req.into_body())
+            .await
             .unwrap_or_default();
 
         let end_req: serde_json::Value = match serde_json::from_str(&body) {
@@ -342,7 +342,8 @@ impl SecureIpcServer {
             }
         };
 
-        let session_id = end_req.get("session_id")
+        let session_id = end_req
+            .get("session_id")
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
@@ -356,17 +357,16 @@ impl SecureIpcServer {
                     "success": true,
                     "session_id": session_id,
                     "status": "ended"
-                })).unwrap()
+                }))
+                .unwrap(),
             ))
             .unwrap()
     }
 
     /// Handle stream start
-    async fn handle_stream_start(
-        req: Request<Body>,
-        host_fingerprint: &str,
-    ) -> Response<Body> {
-        let body = hyper::body::to_string(req.into_body()).await
+    async fn handle_stream_start(req: Request<Body>, host_fingerprint: &str) -> Response<Body> {
+        let body = hyper::body::to_string(req.into_body())
+            .await
             .unwrap_or_default();
 
         let start_req: serde_json::Value = match serde_json::from_str(&body) {
@@ -379,11 +379,15 @@ impl SecureIpcServer {
             }
         };
 
-        let session_id = start_req.get("session_id")
+        let session_id = start_req
+            .get("session_id")
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
-        info!("Stream started: {} by host {}", session_id, host_fingerprint);
+        info!(
+            "Stream started: {} by host {}",
+            session_id, host_fingerprint
+        );
 
         Response::builder()
             .status(200)
@@ -393,17 +397,16 @@ impl SecureIpcServer {
                     "success": true,
                     "session_id": session_id,
                     "status": "streaming"
-                })).unwrap()
+                }))
+                .unwrap(),
             ))
             .unwrap()
     }
 
     /// Handle stream stop
-    async fn handle_stream_stop(
-        req: Request<Body>,
-        host_fingerprint: &str,
-    ) -> Response<Body> {
-        let body = hyper::body::to_string(req.into_body()).await
+    async fn handle_stream_stop(req: Request<Body>, host_fingerprint: &str) -> Response<Body> {
+        let body = hyper::body::to_string(req.into_body())
+            .await
             .unwrap_or_default();
 
         let stop_req: serde_json::Value = match serde_json::from_str(&body) {
@@ -416,11 +419,15 @@ impl SecureIpcServer {
             }
         };
 
-        let session_id = stop_req.get("session_id")
+        let session_id = stop_req
+            .get("session_id")
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
-        info!("Stream stopped: {} by host {}", session_id, host_fingerprint);
+        info!(
+            "Stream stopped: {} by host {}",
+            session_id, host_fingerprint
+        );
 
         Response::builder()
             .status(200)
@@ -430,17 +437,16 @@ impl SecureIpcServer {
                     "success": true,
                     "session_id": session_id,
                     "status": "stopped"
-                })).unwrap()
+                }))
+                .unwrap(),
             ))
             .unwrap()
     }
 
     /// Handle input event
-    async fn handle_input(
-        req: Request<Body>,
-        host_fingerprint: &str,
-    ) -> Response<Body> {
-        let body = hyper::body::to_string(req.into_body()).await
+    async fn handle_input(req: Request<Body>, host_fingerprint: &str) -> Response<Body> {
+        let body = hyper::body::to_string(req.into_body())
+            .await
             .unwrap_or_default();
 
         let input_req: serde_json::Value = match serde_json::from_str(&body) {
@@ -453,11 +459,15 @@ impl SecureIpcServer {
             }
         };
 
-        let session_id = input_req.get("session_id")
+        let session_id = input_req
+            .get("session_id")
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
-        debug!("Input event for session {} by host {}", session_id, host_fingerprint);
+        debug!(
+            "Input event for session {} by host {}",
+            session_id, host_fingerprint
+        );
 
         Response::builder()
             .status(200)
@@ -466,7 +476,8 @@ impl SecureIpcServer {
                 serde_json::to_string(&serde_json::json!({
                     "success": true,
                     "session_id": session_id
-                })).unwrap()
+                }))
+                .unwrap(),
             ))
             .unwrap()
     }
@@ -476,7 +487,9 @@ impl SecureIpcServer {
         Response::builder()
             .status(200)
             .header("Content-Type", "application/json")
-            .body(Body::from(r#"{"status": "healthy", "service": "bipremote-host-service"}"#.to_string()))
+            .body(Body::from(
+                r#"{"status": "healthy", "service": "bipremote-host-service"}"#.to_string(),
+            ))
             .unwrap()
     }
 
@@ -537,15 +550,15 @@ impl SecureIpcClient {
             .ok_or("Failed to load CA cert")?;
 
         let mut root_store = RootCertStore::empty();
-        root_store.add(ca_cert).map_err(|e| format!("Failed to add CA: {}", e))?;
+        root_store
+            .add(ca_cert)
+            .map_err(|e| format!("Failed to add CA: {}", e))?;
 
         let client_cert = CertificateDer::from_pem(SectionKind::Certificate, client_cert_pem)
             .ok_or("Failed to load client cert")?;
 
-        let client_key = PrivateKeyDer::from_pem(
-            SectionKind::PrivateKey,
-            client_key_pem
-        ).ok_or("Failed to load client key")?;
+        let client_key = PrivateKeyDer::from_pem(SectionKind::PrivateKey, client_key_pem)
+            .ok_or("Failed to load client key")?;
 
         let client_config = ClientConfig::builder()
             .with_root_certificates(root_store)
@@ -565,7 +578,11 @@ impl SecureIpcClient {
     }
 
     /// Make a secure HTTP request to the service
-    pub async fn request(&self, path: &str, body: serde_json::Value) -> Result<serde_json::Value, String> {
+    pub async fn request(
+        &self,
+        path: &str,
+        body: serde_json::Value,
+    ) -> Result<serde_json::Value, String> {
         let connector = hyper_rustls::HttpsConnectorBuilder::new()
             .with_tls_config(self.config.clone())
             .https_only()
@@ -585,10 +602,13 @@ impl SecureIpcClient {
 
         let req = req.body(Body::from(body.to_string())).unwrap();
 
-        let resp = client.request(req).await
+        let resp = client
+            .request(req)
+            .await
             .map_err(|e| format!("Request failed: {}", e))?;
 
-        let body_bytes = hyper::body::to_bytes(resp.into_body()).await
+        let body_bytes = hyper::body::to_bytes(resp.into_body())
+            .await
             .map_err(|e| format!("Failed to read body: {}", e))?;
 
         let json: serde_json::Value = serde_json::from_slice(&body_bytes)
@@ -599,17 +619,25 @@ impl SecureIpcClient {
 
     /// Approve a session
     pub async fn approve_session(&self, session_id: &str) -> Result<(), String> {
-        self.request("/api/v1/sessions/approve", serde_json::json!({
-            "session_id": session_id
-        })).await?;
+        self.request(
+            "/api/v1/sessions/approve",
+            serde_json::json!({
+                "session_id": session_id
+            }),
+        )
+        .await?;
         Ok(())
     }
 
     /// End a session
     pub async fn end_session(&self, session_id: &str) -> Result<(), String> {
-        self.request("/api/v1/sessions/end", serde_json::json!({
-            "session_id": session_id
-        })).await?;
+        self.request(
+            "/api/v1/sessions/end",
+            serde_json::json!({
+                "session_id": session_id
+            }),
+        )
+        .await?;
         Ok(())
     }
 
@@ -621,20 +649,28 @@ impl SecureIpcClient {
         width: u32,
         height: u32,
     ) -> Result<(), String> {
-        self.request("/api/v1/streams/start", serde_json::json!({
-            "session_id": session_id,
-            "codec": codec,
-            "width": width,
-            "height": height
-        })).await?;
+        self.request(
+            "/api/v1/streams/start",
+            serde_json::json!({
+                "session_id": session_id,
+                "codec": codec,
+                "width": width,
+                "height": height
+            }),
+        )
+        .await?;
         Ok(())
     }
 
     /// Stop stream
     pub async fn stop_stream(&self, session_id: &str) -> Result<(), String> {
-        self.request("/api/v1/streams/stop", serde_json::json!({
-            "session_id": session_id
-        })).await?;
+        self.request(
+            "/api/v1/streams/stop",
+            serde_json::json!({
+                "session_id": session_id
+            }),
+        )
+        .await?;
         Ok(())
     }
 
@@ -645,11 +681,15 @@ impl SecureIpcClient {
         event_type: &str,
         data: serde_json::Value,
     ) -> Result<(), String> {
-        self.request("/api/v1/input", serde_json::json!({
-            "session_id": session_id,
-            "event_type": event_type,
-            "data": data
-        })).await?;
+        self.request(
+            "/api/v1/input",
+            serde_json::json!({
+                "session_id": session_id,
+                "event_type": event_type,
+                "data": data
+            }),
+        )
+        .await?;
         Ok(())
     }
 }
