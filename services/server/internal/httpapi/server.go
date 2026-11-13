@@ -6,19 +6,29 @@ import (
 	"time"
 
 	"github.com/DevMiguelOliveira/bip-remote/services/server/internal/config"
+	"github.com/DevMiguelOliveira/bip-remote/infrastructure/database"
 )
 
 type Server struct {
-	config config.Config
+	config       config.Config
+	db           *database.Postgres
+	sessionStore *database.SessionStore
 }
 
-func New(cfg config.Config) http.Handler {
-	server := &Server{config: cfg}
+// New creates a new HTTP API server
+func New(cfg config.Config, db *database.Postgres, ss *database.SessionStore) http.Handler {
+	server := &Server{
+		config:       cfg,
+		db:           db,
+		sessionStore: ss,
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", server.health)
 	mux.HandleFunc("GET /readyz", server.ready)
 	mux.HandleFunc("GET /api/v1", server.apiRoot)
-	mux.HandleFunc("GET /api/v1/", server.apiRoot)
+	mux.HandleFunc("GET /api/v1/sessions", server.HandleSessionList)
+	mux.HandleFunc("POST /api/v1/sessions/approve", server.HandleSessionApprove)
+	mux.HandleFunc("POST /api/v1/sessions/end", server.HandleSessionEnd)
 	return requestID(mux)
 }
 
